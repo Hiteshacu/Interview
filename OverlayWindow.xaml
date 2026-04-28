@@ -1,0 +1,97 @@
+<Window x:Class="OverlayAlert.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AlertOverlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        IsHitTestVisible="True"
+        WindowState="Maximized"
+        Visibility="Hidden">
+
+    <!-- Full-screen transparent canvas; overlay content centered -->
+    <Grid IsHitTestVisible="True">
+        <!-- Dimming layer — semi-transparent black vignette -->
+        <Rectangle Fill="#55000000" IsHitTestVisible="False"/>
+
+        <!-- Alert card - split screen horizontally -->
+        <Border HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Margin="20"
+                Background="#CC1A1A2E"
+                BorderBrush="#FFFF6B35"
+                BorderThickness="2"
+                CornerRadius="12"
+                Padding="30,20"
+                IsHitTestVisible="True">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Header section -->
+                <StackPanel Grid.Row="0" HorizontalAlignment="Center" IsHitTestVisible="False">
+                    <!-- Icon row -->
+                    <TextBlock Text="⚠  HIGH PRIORITY ALERT"
+                               FontSize="32"
+                               FontWeight="Bold"
+                               Foreground="#FFFF6B35"
+                               HorizontalAlignment="Center"
+                               FontFamily="Segoe UI"/>
+
+                    <Rectangle Height="2" Fill="#FFFF6B35" Margin="0,12,0,8" Opacity="0.5"/>
+
+                    <!-- Main message -->
+                    <TextBlock x:Name="AlertMessage"
+                               Text="SECURITY ALERT ACTIVE"
+                               FontSize="24"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               HorizontalAlignment="Center"
+                               FontFamily="Segoe UI"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Margin="0,8,0,0"/>
+                </StackPanel>
+
+                <!-- Code section - full width, scrollable with proper wrapping -->
+                <Border Grid.Row="2"
+                        Background="#1A000000"
+                        CornerRadius="8"
+                        Padding="20,15"
+                        Margin="0,15,0,10"
+                        BorderBrush="#33FFFFFF"
+                        BorderThickness="1"
+                        IsHitTestVisible="True">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  IsHitTestVisible="True"
+                                  CanContentScroll="True"
+                                  PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                        <TextBlock x:Name="AlertCode"
+                                   FontSize="13"
+                                   Foreground="#FFD4A8FF"
+                                   FontFamily="Consolas"
+                                   TextWrapping="Wrap"
+                                   LineHeight="18"
+                                   IsHitTestVisible="True"/>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Timestamp -->
+                <TextBlock x:Name="AlertTimestamp"
+                           Grid.Row="3"
+                           FontSize="13"
+                           Foreground="#88FFFFFF"
+                           HorizontalAlignment="Center"
+                           FontFamily="Segoe UI"
+                           Margin="0,5,0,0"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

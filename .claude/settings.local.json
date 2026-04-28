@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(dotnet clean *)",
+      "Bash(where dotnet *)",
+      "Read(//c/Program Files/dotnet/**)",
+      "Read(//c/Users/HP/AppData/Local/Microsoft/dotnet/**)"
+    ]
+  }
+}
