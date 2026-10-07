@@ -1,182 +1,186 @@
-using System;
+using System.Globalization;
 using System.Windows;
-using System.Windows.Forms; // for NotifyIcon (add ref: System.Windows.Forms)
+using System.Windows.Interop;
+using InterviewAssistant.Api;
+using InterviewAssistant.Configuration;
+using InterviewAssistant.Utilities;
+using Forms = System.Windows.Forms;
 
-namespace OverlayAlert
+namespace InterviewAssistant;
+
+public partial class MainWindow : Window
 {
-    public partial class MainWindow : Window
+    private readonly SettingsStore _settingsStore = new();
+    private readonly GlobalHotkeyManager _hotkeyManager = new();
+    private readonly Forms.NotifyIcon _trayIcon;
+    private AppSettings _settings;
+    private OverlayWindow? _overlay;
+
+    public MainWindow()
     {
-        private GlobalKeyboardHook? _hook;
-        private OverlayWindow?      _overlay;
-        private NotifyIcon?         _trayIcon;
+        InitializeComponent();
+        _settings = _settingsStore.Load();
+        PopulateControls();
 
-        public MainWindow()
+        _trayIcon = new Forms.NotifyIcon
         {
-            InitializeComponent();
-            InitializeTrayIcon();
-            StartHook();
+            Icon = System.Drawing.SystemIcons.Information,
+            Text = "AI Interview Assistant",
+            Visible = true,
+            ContextMenuStrip = BuildTrayMenu(),
+        };
+        _trayIcon.DoubleClick += (_, _) => ShowSettings();
 
-            // Create overlay window once; show/hide on demand
-            _overlay = new OverlayWindow();
-            _overlay.Show(); // must call Show() first so HWND is created
-            _overlay.Hide();
-        }
-
-        // ── Hook setup ────────────────────────────────────────────────────────
-
-        private void StartHook()
-        {
-            try
-            {
-                _hook = new GlobalKeyboardHook(Dispatcher);
-                _hook.AlertKeyDown += OnAlertKeyDown;
-                _hook.AlertKeyUp   += OnAlertKeyUp;
-                _hook.Install();
-                StatusText.Text = "● Hook active — hold [A] to trigger overlay";
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"✗ Hook failed: {ex.Message}";
-                StatusBorder.Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(0x22, 0x88, 0, 0));
-            }
-        }
-
-        private const string FlutterCode = @"import 'package:flutter/material.dart';
-void main() => runApp(const MaterialApp(home: TodoApp()));
-class TodoApp extends StatefulWidget {
-  const TodoApp({super.key});
-  @override
-  State createState() => _TodoAppState();
-}
-class _TodoAppState extends State<TodoApp> {
-  final tasks = [];
-  final controller = TextEditingController();
-  void addTask() {
-    if (controller.text.isNotEmpty) {
-      setState(() {
-        tasks.add(controller.text);
-        controller.clear();
-      });
+        SourceInitialized += OnSourceInitialized;
+        _hotkeyManager.Pressed += (_, _) => OpenAssistant();
     }
-  }
-  void removeTask(int index) {
-    setState(() => tasks.removeAt(index));
-  }
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text(""To-Do List"")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                hintText: 'Enter task',
-                suffixIcon: Icon(Icons.task),
-              ),
-              onSubmitted: (_) => addTask(),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: ListView.builder(
-                itemCount: tasks.length,
-                itemBuilder: (_, i) => ListTile(
-                  title: Text(tasks[i]),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () => removeTask(i),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: addTask,
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}";
 
-        private void OnAlertKeyDown(object? sender, EventArgs e)
+    private void OnSourceInitialized(object? sender, EventArgs eventArgs)
+    {
+        _hotkeyManager.Attach(this);
+        TryRegisterHotkey();
+    }
+
+    private void PopulateControls()
+    {
+        HotkeyBox.ItemsSource = new[]
         {
-            // Already on UI thread (marshalled by GlobalKeyboardHook)
-            string alertText = AlertTextBox?.Text ?? "SECURITY ALERT";
-            _overlay?.ShowAlert(alertText, FlutterCode);
-        }
+            "Space", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+            "A", "B", "C", "D", "E", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+        };
+        ApiEndpointBox.Text = _settings.ApiEndpoint;
+        ModelBox.Text = _settings.Model;
+        GroqVisionModelBox.Text = _settings.GroqVisionModel;
+        GeminiVisionModelBox.Text = _settings.GeminiVisionModel;
+        GroqKeyBox.Password = _settings.GroqApiKey;
+        GeminiKeyBox.Password = _settings.GeminiApiKey;
+        ProviderComboBox.SelectedIndex = _settings.SelectedProvider.Equals("Gemini", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        EnableProtectionBox.IsChecked = _settings.EnableCaptureProtection;
+        AutoUiaBox.IsChecked = _settings.AutoExtractUiaContext;
+        HotkeyBox.SelectedItem = _settings.HotkeyKey;
+        ControlBox.IsChecked = _settings.HotkeyControl;
+        AltBox.IsChecked = _settings.HotkeyAlt;
+        ShiftBox.IsChecked = _settings.HotkeyShift;
+        WindowsBox.IsChecked = _settings.HotkeyWindows;
+        OpacitySlider.Value = _settings.OverlayOpacity;
+        WidthBox.Text = _settings.OverlayWidth.ToString(CultureInfo.InvariantCulture);
+        HeightBox.Text = _settings.OverlayHeight.ToString(CultureInfo.InvariantCulture);
+        LeftBox.Text = _settings.OverlayLeft.ToString(CultureInfo.InvariantCulture);
+        TopBox.Text = _settings.OverlayTop.ToString(CultureInfo.InvariantCulture);
+    }
 
-        private void OnAlertKeyUp(object? sender, EventArgs e)
+    private bool SaveSettings()
+    {
+        try
         {
-            _overlay?.HideAlert();
+            AppSettings settings = ReadSettings();
+            _settingsStore.Save(settings);
+            _settings = settings;
+            TryRegisterHotkey();
+            StatusText.Text = $"Saved. Shortcut: {_settings.HotkeyDisplay}";
+            AppLogger.Info("Settings saved.");
+            return true;
         }
-
-        // ── Button handlers ───────────────────────────────────────────────────
-
-        private void MinimizeToTray_Click(object sender, RoutedEventArgs e)
+        catch (Exception exception)
         {
-            Hide(); // hide main config window; hook keeps running
+            StatusText.Text = exception.Message;
+            AppLogger.Error("Could not save settings.", exception);
+            return false;
         }
+    }
 
-        private void TestOverlay_Click(object sender, RoutedEventArgs e)
+    private AppSettings ReadSettings()
+    {
+        if (string.IsNullOrWhiteSpace(ApiEndpointBox.Text) || string.IsNullOrWhiteSpace(ModelBox.Text))
+            throw new InvalidOperationException("API endpoint and model are required.");
+        if (HotkeyBox.SelectedItem is not string hotkey)
+            throw new InvalidOperationException("Choose a shortcut key.");
+
+        return new AppSettings
         {
-            string alertText = AlertTextBox?.Text ?? "TEST ALERT";
-            _overlay?.ShowAlert(alertText, "Manual test — click anywhere or press A to dismiss");
+            ApiEndpoint = ApiEndpointBox.Text.Trim(),
+            Model = ModelBox.Text.Trim(),
+            GroqVisionModel = GroqVisionModelBox.Text.Trim(),
+            GeminiVisionModel = GeminiVisionModelBox.Text.Trim(),
+            GroqApiKey = GroqKeyBox.Password.Trim(),
+            GeminiApiKey = GeminiKeyBox.Password.Trim(),
+            SelectedProvider = ProviderComboBox.SelectedIndex == 1 ? "Gemini" : "Groq",
+            EnableCaptureProtection = EnableProtectionBox.IsChecked == true,
+            AutoExtractUiaContext = AutoUiaBox.IsChecked == true,
+            HotkeyKey = hotkey,
+            HotkeyControl = ControlBox.IsChecked == true,
+            HotkeyAlt = AltBox.IsChecked == true,
+            HotkeyShift = ShiftBox.IsChecked == true,
+            HotkeyWindows = WindowsBox.IsChecked == true,
+            OverlayOpacity = OpacitySlider.Value,
+            OverlayWidth = ParseRange(WidthBox.Text, "Width", 360, 1000),
+            OverlayHeight = ParseRange(HeightBox.Text, "Height", 420, 1000),
+            OverlayLeft = ParseRange(LeftBox.Text, "Left position", -10000, 10000),
+            OverlayTop = ParseRange(TopBox.Text, "Top position", -10000, 10000),
+        };
+    }
 
-            // Auto-hide after 3 s in test mode
-            var timer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(3)
-            };
-            timer.Tick += (_, __) => { timer.Stop(); _overlay?.HideAlert(); };
-            timer.Start();
-        }
+    private static double ParseRange(string value, string label, double min, double max)
+    {
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) || parsed < min || parsed > max)
+            throw new InvalidOperationException($"{label} must be between {min} and {max}.");
+        return parsed;
+    }
 
-        private void Exit_Click(object sender, RoutedEventArgs e)
+    private void TryRegisterHotkey()
+    {
+        try
         {
-            Cleanup();
-            System.Windows.Application.Current.Shutdown();
+            _hotkeyManager.Register(_settings.HotkeyKey, _settings.HotkeyControl, _settings.HotkeyAlt, _settings.HotkeyShift, _settings.HotkeyWindows);
         }
-
-        // ── Tray icon ─────────────────────────────────────────────────────────
-
-        private void InitializeTrayIcon()
+        catch (Exception exception)
         {
-            _trayIcon = new NotifyIcon
-            {
-                Icon    = System.Drawing.SystemIcons.Shield,
-                Visible = true,
-                Text    = "Alert Overlay System",
-                ContextMenuStrip = BuildTrayMenu()
-            };
-            _trayIcon.DoubleClick += (_, __) => { Show(); WindowState = WindowState.Normal; };
+            StatusText.Text = $"Could not register {_settings.HotkeyDisplay}: {exception.Message}";
+            AppLogger.Error("Could not register hotkey.", exception);
         }
+    }
 
-        private ContextMenuStrip BuildTrayMenu()
-        {
-            var menu = new ContextMenuStrip();
-            menu.Items.Add("Show config", null, (_, __) => { Show(); Activate(); });
-            menu.Items.Add("Exit",        null, (_, __) => Exit_Click(this, new RoutedEventArgs()));
-            return menu;
-        }
+    private void SaveSettings_Click(object sender, RoutedEventArgs eventArgs) => SaveSettings();
 
-        // ── Cleanup ───────────────────────────────────────────────────────────
+    private void OpenAssistant_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (SaveSettings()) OpenAssistant();
+    }
 
-        private void Cleanup()
-        {
-            _hook?.Dispose();
-            _trayIcon?.Dispose();
-            _overlay?.Close();
-        }
+    private void OpenAssistant()
+    {
+        _overlay ??= new OverlayWindow();
+        _overlay.ShowAssistant(_settings);
+    }
 
-        protected override void OnClosed(EventArgs e)
-        {
-            Cleanup();
-            base.OnClosed(e);
-        }
+    private Forms.ContextMenuStrip BuildTrayMenu()
+    {
+        var menu = new Forms.ContextMenuStrip();
+        menu.Items.Add("Open assistant", null, (_, _) => OpenAssistant());
+        menu.Items.Add("Show settings", null, (_, _) => ShowSettings());
+        menu.Items.Add("Exit", null, (_, _) => ExitApplication());
+        return menu;
+    }
+
+    private void ShowSettings()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void Exit_Click(object sender, RoutedEventArgs eventArgs) => ExitApplication();
+
+    private void ExitApplication()
+    {
+        _overlay?.CloseForShutdown();
+        Close();
+    }
+
+    protected override void OnClosed(EventArgs eventArgs)
+    {
+        _hotkeyManager.Dispose();
+        _trayIcon.Dispose();
+        base.OnClosed(eventArgs);
     }
 }

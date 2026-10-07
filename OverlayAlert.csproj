@@ -3,13 +3,14 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <RootNamespace>OverlayAlert</RootNamespace>
-    <AssemblyName>OverlayAlert</AssemblyName>
+    <RootNamespace>InterviewAssistant</RootNamespace>
+    <AssemblyName>InterviewAssistant</AssemblyName>
     <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>   <!-- for NotifyIcon -->
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
 
 </Project>

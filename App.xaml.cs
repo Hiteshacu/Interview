@@ -1,8 +1,8 @@
 using System.Windows;
 
-namespace OverlayAlert
+namespace InterviewAssistant
 {
-    public partial class App : Application
+    public partial class App : System.Windows.Application
     {
     }
 }
